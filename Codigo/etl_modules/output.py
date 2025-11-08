@@ -65,18 +65,26 @@ class OutputManager:
         
         # Pestaña 1: Resumen (todos los datos con BILLING COORDINATORS del INNER JOIN)
         resumen_df = df.copy()
+
+        # Eliminar filas sin valor en la columna Plant
+        if 'Plant' in resumen_df.columns:
+            rows_before = len(resumen_df)
+            resumen_df = resumen_df.dropna(subset=['Plant'])
+            rows_removed = rows_before - len(resumen_df)
+            if rows_removed > 0:
+                print(f"      • Eliminadas {rows_removed:,} filas sin Plant en Resumen")
         
         # Pestaña 2: APEX (filtrar Task text que contenga "APEX")
-        if 'Task text' in df.columns:
-            apex_df = df[df['Task text'].astype(str).str.contains('APEX', case=False, na=False)].copy()
+        if 'Task text' in resumen_df.columns:
+            apex_df = resumen_df[resumen_df['Task text'].astype(str).str.contains('APEX', case=False, na=False)].copy()
             print(f"      • APEX: {len(apex_df):,} registros")
         else:
             apex_df = pd.DataFrame()
             print("      ⚠️  Columna 'Task text' no encontrada para filtro APEX")
-        
+
         # Pestaña 3: COMMAND (filtrar Task text que contenga "COMMAND")
-        if 'Task text' in df.columns:
-            command_df = df[df['Task text'].astype(str).str.contains('COMMAND', case=False, na=False)].copy()
+        if 'Task text' in resumen_df.columns:
+            command_df = resumen_df[resumen_df['Task text'].astype(str).str.contains('COMMAND', case=False, na=False)].copy()
             print(f"      • COMMAND: {len(command_df):,} registros")
         else:
             command_df = pd.DataFrame()
