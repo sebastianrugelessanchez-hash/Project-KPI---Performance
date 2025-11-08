@@ -11,7 +11,73 @@ import numpy as np
 from typing import Dict
 import warnings
 import os
+import re
 warnings.filterwarnings('ignore')
+
+
+# ============================================================
+# FUNCIONES DE NORMALIZACIÓN
+# ============================================================
+
+def normalize_text(text):
+    """
+    Normaliza texto eliminando números (0-9), caracteres especiales,
+    valores mixtos (letras con números como D245, DB09, AGG3858) y
+    convierte todo a minúsculas.
+
+    Ejemplos:
+    - "Delivery 820235055 is incomplete" → "delivery is incomplete"
+    - "Invoice-Error_123" → "invoice error"
+    - "D245 issue" → "issue"
+    - "Status: DB09" → "status"
+    - "AGG3858_Problem" → "problem"
+
+    Args:
+        text: Texto a normalizar
+
+    Returns:
+        Texto normalizado en minúsculas sin números ni caracteres especiales
+    """
+    if pd.isna(text) or text == '':
+        return text
+
+    # Convertir a string si no lo es
+    text = str(text)
+
+    # 1. Convertir a minúsculas
+    text = text.lower()
+
+    # 2. Reemplazar caracteres especiales por espacios (para mantener separación de palabras)
+    # Esto convierte "Invoice-Error" en "Invoice Error"
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+
+    # 3. Eliminar valores mixtos (palabras que contienen números)
+    # Esto elimina palabras como "D245", "DB09", "AGG3858", "123"
+    text = re.sub(r'\b\w*\d+\w*\b', '', text)
+
+    # 4. Eliminar espacios múltiples
+    text = re.sub(r'\s+', ' ', text)
+
+    # 5. Eliminar espacios al inicio y final
+    text = text.strip()
+
+    return text
+
+
+def normalize_dataframe_column(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+    """
+    Normaliza una columna específica del DataFrame.
+
+    Args:
+        df: DataFrame
+        column_name: Nombre de la columna a normalizar
+
+    Returns:
+        DataFrame con la columna normalizada
+    """
+    if column_name in df.columns:
+        df[column_name] = df[column_name].apply(normalize_text)
+    return df
 
 
 # ============================================================
@@ -31,25 +97,25 @@ COORDINATORS_FILE_PATH = os.path.join(BASE_DIR, COORDINATORS_FILE_NAME)
 def load_excel_data(file_path: str = None) -> pd.DataFrame:
     """
     Carga los datos de la hoja DB del archivo Excel principal
-    
+
     Args:
         file_path: Ruta al archivo Excel principal. Si no se proporciona,
                    usa la ruta por defecto configurada.
-        
+
     Returns:
-        DataFrame con datos de la hoja DB
+        DataFrame con datos de la hoja DB, con columna "Work item text" normalizada
     """
     # Si no se proporciona ruta, usar la ruta por defecto
     if file_path is None:
         file_path = DB_FILE_PATH
-    
+
     print(f"   📂 Cargando archivo principal: {file_path}")
-    
+
     # Verificar que el archivo existe
     if not os.path.exists(file_path):
         print(f"   ❌ ERROR: Archivo no encontrado en: {file_path}")
         raise FileNotFoundError(f"El archivo no existe: {file_path}")
-    
+
     # Cargar hoja DB
     print("   • Leyendo hoja 'DB'...")
     db_df = pd.read_excel(
@@ -57,7 +123,13 @@ def load_excel_data(file_path: str = None) -> pd.DataFrame:
         sheet_name='DB',
         engine='pyxlsb'  # Engine específico para .xlsb
     )
-    
+
+    # Normalizar columna "Work item text" si existe
+    if 'Work item text' in db_df.columns:
+        print("   • Normalizando columna 'Work item text'...")
+        db_df = normalize_dataframe_column(db_df, 'Work item text')
+        print("   ✓ Columna normalizada (números, caracteres especiales y valores mixtos eliminados)")
+
     return db_df
 
 
