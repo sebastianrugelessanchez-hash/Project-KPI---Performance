@@ -3,11 +3,12 @@ ETL Pipeline - Main Entry Point
 ================================
 Pipeline modular para procesamiento de datos Excel de facturación
 
-VERSIÓN 2.2 - CAMBIOS:
-- Genera 1 archivo con 6 pestañas: Resumen, APEX, COMMAND, Billing Coordinators, Plants, Issues
+VERSIÓN 2.3 - CAMBIOS:
+- Genera 1 archivo con 7 pestañas: Resumen, APEX, COMMAND, Billing Coordinators, Plants, Issues, Inventory
 - Nueva pestaña "Billing Coordinators" con análisis de desempeño
 - Nueva pestaña "Plants" con top 3 plantas por coordinador
 - Nueva pestaña "Issues" con distribución de categorías por biller
+- Nueva pestaña "Inventory" con análisis de inventario por región
 - Nota: La columna de coordinadores se llama 'BILLING COORDINATORS' (mayúscula, con espacio)
   después del INNER JOIN con el archivo Billing Coordinators.xlsx
 """
@@ -80,6 +81,7 @@ def main():
     print("      4. Billing Coordinators - Desempeño de coordinadores")
     print("      5. Plants - Agregado por planta con métricas")
     print("      6. Issues - Agregado por issue con métricas")
+    print("      7. Inventory - Inventario por región")
     
     return categorized_data
 

@@ -440,11 +440,11 @@ def create_pivot_analysis(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame pivote
     """
     print("   📊 Creando análisis pivote...")
-    
+
     if 'Month_Name' not in df.columns or 'Category' not in df.columns:
         print("   ⚠️  Campos necesarios no encontrados")
         return pd.DataFrame()
-    
+
     # CAMBIO: usar 'BILLING COORDINATORS'
     pivot = pd.pivot_table(
         df,
@@ -454,10 +454,88 @@ def create_pivot_analysis(df: pd.DataFrame) -> pd.DataFrame:
         aggfunc='count',
         fill_value=0
     )
-    
+
     # Agregar total por fila
     pivot['Total'] = pivot.sum(axis=1)
-    
+
     print(f"   ✓ Tabla pivote creada: {pivot.shape[0]} filas x {pivot.shape[1]} columnas")
-    
+
     return pivot
+
+
+def aggregate_by_inventory(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Crea resumen de inventario por región
+
+    Estructura:
+    - Region: Nombre de la región (concatenado con Plant)
+    - Quantity: Total de inventario por región
+    - Percentage: Porcentaje del total
+    - Biller: Billing Coordinator asociado a la planta con mayor inventario en la región
+    - Plant: Planta con mayor inventario en la región
+
+    Args:
+        df: DataFrame categorizado con columnas REGION y Delivery quantity
+
+    Returns:
+        DataFrame con métricas de inventario por región
+    """
+    print("   📊 Agregando métricas de inventario por región...")
+
+    # Verificar columnas necesarias
+    required_columns = ['REGION', 'Plant', 'Delivery quantity', 'BILLING COORDINATORS']
+    missing_cols = [col for col in required_columns if col not in df.columns]
+    if missing_cols:
+        print(f"   ⚠️  Columnas faltantes: {missing_cols}")
+        return pd.DataFrame()
+
+    # Crear copia para no modificar el original
+    inventory_df = df.copy()
+
+    # Filtrar solo registros con Inventory en la categoría
+    if 'Category' in inventory_df.columns:
+        inventory_df = inventory_df[inventory_df['Category'] == 'Inventory'].copy()
+
+    if len(inventory_df) == 0:
+        print("   ⚠️  No se encontraron registros de Inventory")
+        return pd.DataFrame()
+
+    # Agrupar por Región y Plant para calcular inventario total
+    region_plant_inventory = inventory_df.groupby(['REGION', 'Plant']).agg({
+        'Delivery quantity': 'sum',
+        'BILLING COORDINATORS': 'first'  # Obtener el coordinador asociado
+    }).reset_index()
+
+    region_plant_inventory.columns = ['Region', 'Plant', 'Plant_Inventory', 'Biller']
+
+    # Calcular inventario total por región
+    region_totals = region_plant_inventory.groupby('Region')['Plant_Inventory'].sum().reset_index()
+    region_totals.columns = ['Region', 'Total_Region_Inventory']
+
+    # Merge para obtener el total regional en cada fila
+    region_plant_inventory = region_plant_inventory.merge(region_totals, on='Region', how='left')
+
+    # Encontrar la planta con mayor inventario por región
+    region_plant_inventory = region_plant_inventory.sort_values(
+        ['Region', 'Plant_Inventory'],
+        ascending=[True, False]
+    )
+
+    # Seleccionar solo la planta con mayor inventario por región
+    inventory_summary = region_plant_inventory.drop_duplicates('Region', keep='first').copy()
+
+    # Calcular porcentaje
+    inventory_summary['Percentage'] = (
+        inventory_summary['Plant_Inventory'] / inventory_summary['Total_Region_Inventory'] * 100
+    ).round(2).astype(str) + '%'
+
+    # Renombrar columnas para la salida final
+    inventory_summary = inventory_summary[['Region', 'Total_Region_Inventory', 'Percentage', 'Biller', 'Plant']]
+    inventory_summary.columns = ['Region', 'Quantity', 'Percentage', 'Biller', 'Plant']
+
+    # Reordenar columnas según especificación
+    inventory_summary = inventory_summary[['Region', 'Quantity', 'Percentage', 'Biller', 'Plant']]
+
+    print(f"   ✓ Resumen de inventario creado: {len(inventory_summary)} regiones")
+
+    return inventory_summary

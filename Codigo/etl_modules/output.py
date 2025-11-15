@@ -3,13 +3,14 @@ Output Module
 =============
 Módulo para exportar resultados en formato simplificado
 
-VERSIÓN 2.2 - Genera 1 archivo Excel con 6 pestañas:
+VERSIÓN 2.3 - Genera 1 archivo Excel con 7 pestañas:
   1. Resumen - Todos los datos
   2. APEX - Incidentes APEX
   3. COMMAND - Incidentes COMMAND
   4. Billing Coordinators - Desempeño de coordinadores
   5. Plants - Top 3 plantas por coordinador
   6. Issues - Distribución de categorías por biller
+  7. Inventory - Inventario por región
 
 Sin visualizaciones (para Looker Studio)
 
@@ -43,13 +44,14 @@ class OutputManager:
     
     def export_final_report(self, df: pd.DataFrame) -> str:
         """
-        Exporta el reporte final con 6 pestañas:
+        Exporta el reporte final con 7 pestañas:
         1. Resumen: Todos los datos después del merge (ya tiene BILLING COORDINATORS)
         2. APEX: Solo incidentes con "APEX" en columna Task text
         3. COMMAND: Solo incidentes con "COMMAND" en columna Task text
         4. Billing Coordinators: Desempeño de cada coordinador (calculado desde Resumen)
         5. Plants: Agregado por planta con métricas
         6. Issue: Agregado por issue con métricas
+        7. Inventory: Inventario por región
 
         IMPORTANTE: Usa la columna 'BILLING COORDINATORS' (mayúscula, con espacio)
 
@@ -60,9 +62,9 @@ class OutputManager:
             Ruta del archivo generado
         """
         filename = self._get_filename("Performance")
-        
-        print("   📊 Creando reporte final con 6 pestañas...")
-        
+
+        print("   📊 Creando reporte final con 7 pestañas...")
+
         # Pestaña 1: Resumen (todos los datos con BILLING COORDINATORS del INNER JOIN)
         resumen_df = df.copy()
 
@@ -73,7 +75,7 @@ class OutputManager:
             rows_removed = rows_before - len(resumen_df)
             if rows_removed > 0:
                 print(f"      • Eliminadas {rows_removed:,} filas sin Plant en Resumen")
-        
+
         # Pestaña 2: APEX (filtrar Task text que contenga "APEX")
         if 'Task text' in resumen_df.columns:
             apex_df = resumen_df[resumen_df['Task text'].astype(str).str.contains('APEX', case=False, na=False)].copy()
@@ -89,7 +91,7 @@ class OutputManager:
         else:
             command_df = pd.DataFrame()
             print("      ⚠️  Columna 'Task text' no encontrada para filtro COMMAND")
-        
+
         # Pestaña 4: Billing Coordinators Performance
         # Usa el DataFrame del Resumen que YA tiene la columna BILLING COORDINATORS del INNER JOIN
         print("      • Calculando desempeño de Billing Coordinators desde Resumen...")
@@ -115,12 +117,20 @@ class OutputManager:
         else:
             print("      ⚠️  No se pudo agregar datos por issue")
 
-        # Crear archivo Excel con 6 pestañas
+        # Pestaña 7: Inventory
+        print("      • Agregando datos de Inventario por Región...")
+        inventory_df = transformation.aggregate_by_inventory(resumen_df)
+        if not inventory_df.empty:
+            print(f"      • Inventory: {len(inventory_df):,} regiones")
+        else:
+            print("      ⚠️  No se pudo agregar datos de inventario")
+
+        # Crear archivo Excel con 7 pestañas
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             # Pestaña 1: Resumen
             resumen_df.to_excel(writer, sheet_name='Resumen', index=False)
             print(f"      • Resumen: {len(resumen_df):,} registros")
-            
+
             # Pestaña 2: APEX
             if not apex_df.empty:
                 apex_df.to_excel(writer, sheet_name='APEX', index=False)
@@ -129,7 +139,7 @@ class OutputManager:
                 pd.DataFrame({'Mensaje': ['No se encontraron registros APEX']}).to_excel(
                     writer, sheet_name='APEX', index=False
                 )
-            
+
             # Pestaña 3: COMMAND
             if not command_df.empty:
                 command_df.to_excel(writer, sheet_name='COMMAND', index=False)
@@ -138,7 +148,7 @@ class OutputManager:
                 pd.DataFrame({'Mensaje': ['No se encontraron registros COMMAND']}).to_excel(
                     writer, sheet_name='COMMAND', index=False
                 )
-            
+
             # Pestaña 4: Billing Coordinators
             if not billing_coord_df.empty:
                 billing_coord_df.to_excel(writer, sheet_name='Billing Coordinators', index=False)
@@ -166,9 +176,18 @@ class OutputManager:
                     writer, sheet_name='Issues', index=False
                 )
 
+            # Pestaña 7: Inventory
+            if not inventory_df.empty:
+                inventory_df.to_excel(writer, sheet_name='Inventory', index=False)
+            else:
+                # Crear hoja vacía con mensaje
+                pd.DataFrame({'Mensaje': ['No se encontraron datos de inventario']}).to_excel(
+                    writer, sheet_name='Inventory', index=False
+                )
+
         self.created_files.append(filename)
         print(f"   ✓ Archivo guardado: {filename}")
-        
+
         return filename
     
     def get_created_files(self) -> List[str]:
@@ -179,13 +198,14 @@ class OutputManager:
 def export_results(df: pd.DataFrame) -> List[str]:
     """
     Función principal para exportar resultados
-    Genera UN SOLO archivo con 6 pestañas:
+    Genera UN SOLO archivo con 7 pestañas:
     1. Resumen
     2. APEX
     3. COMMAND
     4. Billing Coordinators
     5. Plants
     6. Issues
+    7. Inventory
 
     IMPORTANTE: El DataFrame debe venir DESPUÉS del INNER JOIN (debe tener BILLING COORDINATORS)
     Usa la columna 'BILLING COORDINATORS' (mayúscula, con espacio)
