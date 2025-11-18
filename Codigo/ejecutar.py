@@ -11,12 +11,17 @@ import os
 import sys
 from datetime import datetime
 
+# Configurar UTF-8 para soportar emojis en Windows
+sys.stdout.reconfigure(encoding='utf-8')
+
 
 def print_header():
     """Imprime header"""
     print("\n" + "="*60)
     print("🚀 PIPELINE ETL v2.1 - PROCESAMIENTO AUTOMATIZADO")
     print("="*60 + "\n")
+
+
 
 
 def verificar_archivos_datos():
@@ -110,14 +115,14 @@ def crear_directorios():
     """Crea directorios necesarios"""
     print("\n📂 Preparando directorios...")
 
-    directorios = ['output']
+    from etl_modules import config
 
-    for dir in directorios:
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-            print(f"   📁 Creado: {dir}/")
-        else:
-            print(f"   ✓ Existe: {dir}/")
+    # Crear directorio de salida si no existe
+    if not os.path.exists(config.OUTPUT_DIR):
+        os.makedirs(config.OUTPUT_DIR)
+        print(f"   📁 Creado: {config.OUTPUT_DIR}/")
+    else:
+        print(f"   ✓ Existe: {config.OUTPUT_DIR}/")
 
 
 def ejecutar_pipeline():

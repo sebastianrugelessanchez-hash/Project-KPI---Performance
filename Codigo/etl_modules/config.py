@@ -6,7 +6,7 @@ Configuración y constantes de la pipeline ETL
 
 # Definición de categorías de incidentes
 INCIDENT_CATEGORIES = {
-    'Contrato': [
+    'Contract': [
         'Error Shipto related to Contract',
         'JWS/APEX - Assign Contract',
         'COMMAND - Assign Contract',
@@ -99,5 +99,5 @@ FILTER_TEXT = "is currently being processed"
 CHUNK_SIZE = 10000  # Procesar 10k registros a la vez
 
 # Configuración de salida
-OUTPUT_DIR = "output"
+OUTPUT_DIR = r"C:\Users\Sebas\OneDrive\Desktop\Proyecto KPI\output"
 OUTPUT_FILENAME = "processed_data"

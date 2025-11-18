@@ -39,26 +39,27 @@ def categorize_incidents(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_billing_coordinator_performance(df: pd.DataFrame, agent_column: str = 'Actual (last) agent') -> pd.DataFrame:
     """
     Calcula el desempeño de cada Billing Coordinator usando métricas:
-    
+
     1. Promedio de Días Dedicados = promedio de ("OK - Actual End Date of Work Item" - "Date")
     2. Tickets procesados = conteo de tickets únicos (validados por Object Type)
     3. Categoria_Principal = categoría más frecuente (excluyendo "Inventory")
     4. Issue = subcategoría más frecuente (moda de "Work item text" dentro de su categoría)
-    
+
     Args:
         df: DataFrame con datos enriquecidos y categorizados
-        
+        agent_column: Nombre de la columna a usar (por defecto 'Actual (last) agent')
+
     Returns:
         DataFrame con métricas de desempeño por Billing Coordinator
     """
     print("   📊 Calculando desempeño de Billing Coordinators...")
-    
+
     # Verificar columnas necesarias
     required_columns = [
-        'BILLING COORDINATORS', 'Plant', 'Date', 
+        agent_column, 'Plant', 'Date',
         'OK - Actual End Date of Work Item', 'Ticket', 'Object Type', 'Work item text'
     ]
     
@@ -88,18 +89,18 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
     work_df['Dias_Dedicados'] = work_df['Dias_Dedicados'].fillna(0)
     work_df.loc[work_df['Dias_Dedicados'] < 0, 'Dias_Dedicados'] = 0
     
-    # Agrupar por Billing Coordinator
-    performance = work_df.groupby('BILLING COORDINATORS').agg({
+    # Agrupar por Agent
+    performance = work_df.groupby(agent_column).agg({
         'Dias_Dedicados': 'mean',  # PROMEDIO de días dedicados
         'ID': 'nunique',           # IDs únicos procesados
         'Plant': 'nunique',        # Plants asociadas
     }).reset_index()
     
     performance.columns = [
-        'Billing_Coordinator', 
-        'Promedio_Dias_Dedicados', 
-        'Tickets_Procesados',
-        'Plants_Asociadas'
+        'Billing_Coordinator',
+        'Average_Days_Spent',
+        'Tickets_Processed',
+        'Associated_Plants'
     ]
     
     # ============================================================
@@ -108,7 +109,7 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
     
     def get_category_principal(coordinator_name):
         """Obtiene la categoría más frecuente excluyendo Inventory"""
-        mask = work_df['BILLING COORDINATORS'] == coordinator_name
+        mask = work_df[agent_column] == coordinator_name
         filtered_categories = work_df[mask]['Category']
         
         # Excluir "Inventory" y obtener la más frecuente
@@ -119,7 +120,7 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
         
         return filtered_categories.value_counts().index[0]
     
-    performance['Categoria_Principal'] = performance['Billing_Coordinator'].apply(get_category_principal)
+    performance['Main_Category'] = performance['Billing_Coordinator'].apply(get_category_principal)
     
     
     # ============================================================
@@ -128,7 +129,7 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
     
     def get_issue_for_coordinator(coordinator_name, category):
         """Obtiene la subcategoría más frecuente (moda) de Work item text para un coordinador y categoría"""
-        mask = (work_df['BILLING COORDINATORS'] == coordinator_name) & (work_df['Category'] == category)
+        mask = (work_df[agent_column] == coordinator_name) & (work_df['Category'] == category)
         filtered = work_df[mask]['Work item text']
         
         if len(filtered) == 0:
@@ -139,7 +140,7 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
     
     # Aplicar función para obtener Issue
     performance['Issue'] = performance.apply(
-        lambda row: get_issue_for_coordinator(row['Billing_Coordinator'], row['Categoria_Principal']),
+        lambda row: get_issue_for_coordinator(row['Billing_Coordinator'], row['Main_Category']),
         axis=1
     )
 
@@ -149,11 +150,11 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
 
     def count_issue_occurrences(coordinator_name, category, issue):
         """Cuenta cuántas veces aparece un issue específico para un coordinador y categoría"""
-        mask = (work_df['BILLING COORDINATORS'] == coordinator_name) & (work_df['Category'] == category) & (work_df['Work item text'] == issue)
+        mask = (work_df[agent_column] == coordinator_name) & (work_df['Category'] == category) & (work_df['Work item text'] == issue)
         return len(work_df[mask])
 
-    performance['Numero_de_veces'] = performance.apply(
-        lambda row: count_issue_occurrences(row['Billing_Coordinator'], row['Categoria_Principal'], row['Issue']),
+    performance['Occurrences'] = performance.apply(
+        lambda row: count_issue_occurrences(row['Billing_Coordinator'], row['Main_Category'], row['Issue']),
         axis=1
     )
 
@@ -163,42 +164,42 @@ def calculate_billing_coordinator_performance(df: pd.DataFrame) -> pd.DataFrame:
 
     def count_category_occurrences(coordinator_name, category):
         """Cuenta cuántas veces aparece una categoría específica para un coordinador"""
-        mask = (work_df['BILLING COORDINATORS'] == coordinator_name) & (work_df['Category'] == category)
+        mask = (work_df[agent_column] == coordinator_name) & (work_df['Category'] == category)
         return len(work_df[mask])
 
     def calculate_category_percentage(coordinator_name, category):
         """Calcula el porcentaje de una categoría respecto al total de registros del coordinador"""
-        total_coordinator = len(work_df[work_df['BILLING COORDINATORS'] == coordinator_name])
+        total_coordinator = len(work_df[work_df[agent_column] == coordinator_name])
         category_count = count_category_occurrences(coordinator_name, category)
         if total_coordinator == 0:
             return '0%'
         percentage = round((category_count / total_coordinator) * 100, 2)
         return f'{percentage}%'
 
-    performance['Categoria_Numero_de_veces'] = performance.apply(
-        lambda row: count_category_occurrences(row['Billing_Coordinator'], row['Categoria_Principal']),
+    performance['Category_Count'] = performance.apply(
+        lambda row: count_category_occurrences(row['Billing_Coordinator'], row['Main_Category']),
         axis=1
     )
 
-    performance['Categoria_Porcentaje'] = performance.apply(
-        lambda row: calculate_category_percentage(row['Billing_Coordinator'], row['Categoria_Principal']),
+    performance['Category_Percentage'] = performance.apply(
+        lambda row: calculate_category_percentage(row['Billing_Coordinator'], row['Main_Category']),
         axis=1
     )
 
-    # Filtrar Categoria_Principal para excluir "Inventory"
-    performance_filtered = performance[performance['Categoria_Principal'] != 'Inventory'].copy()
-    
+    # Filtrar Main_Category para excluir "Inventory"
+    performance_filtered = performance[performance['Main_Category'] != 'Inventory'].copy()
+
     # Reordenar columnas para mejor visualización
     performance_filtered = performance_filtered[[
         'Billing_Coordinator',
-        'Promedio_Dias_Dedicados',
-        'Tickets_Procesados',
-        'Plants_Asociadas',
-        'Categoria_Principal',
-        'Categoria_Numero_de_veces',
-        'Categoria_Porcentaje',
+        'Average_Days_Spent',
+        'Tickets_Processed',
+        'Associated_Plants',
+        'Main_Category',
+        'Category_Count',
+        'Category_Percentage',
         'Issue',
-        'Numero_de_veces'
+        'Occurrences'
     ]]
     
     print(f"   ✓ Desempeño calculado para {len(performance_filtered)} coordinadores (excluyendo Inventory)")
@@ -308,39 +309,40 @@ def aggregate_by_coordinator(df: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
-def aggregate_by_plant(df: pd.DataFrame) -> pd.DataFrame:
+def aggregate_by_plant(df: pd.DataFrame, agent_column: str = 'Actual (last) agent') -> pd.DataFrame:
     """
-    Crea resumen agregado por Billing Coordinator y Plant
-    Muestra los top 3 plantas con más issues por cada coordinador
+    Crea resumen agregado por Agent y Plant
+    Muestra los top 3 plantas con más issues por cada agente
 
     Estructura:
-    - Biller: Billing Coordinator
+    - Biller: Agent
     - Plants: Nombre de la planta
     - Category: Categoría del incidente
-    - Porcentaje: Porcentaje de incidentes en esa planta/categoria respecto al total del coordinador
+    - Porcentaje: Porcentaje de incidentes en esa planta/categoria respecto al total del agente
     - N-veces: Cantidad de incidentes
 
     Args:
         df: DataFrame categorizado
+        agent_column: Nombre de la columna a usar (por defecto 'Actual (last) agent')
 
     Returns:
-        DataFrame con top 3 plantas por coordinador
+        DataFrame con top 3 plantas por agente
     """
-    print("   📊 Agregando métricas por Billing Coordinator y Plant (Top 3)...")
+    print("   📊 Agregando métricas por Agent y Plant (Top 3)...")
 
-    if 'BILLING COORDINATORS' not in df.columns:
-        print("   ⚠️  Columna 'BILLING COORDINATORS' no encontrada")
+    if agent_column not in df.columns:
+        print(f"   ⚠️  Columna '{agent_column}' no encontrada")
         return pd.DataFrame()
 
-    # Agrupar por Coordinador, Planta y Categoría
-    summary = df.groupby(['BILLING COORDINATORS', 'Plant', 'Category']).agg({
+    # Agrupar por Agent, Planta y Categoría
+    summary = df.groupby([agent_column, 'Plant', 'Category']).agg({
         'ID': 'count'
     }).reset_index()
 
     summary.columns = ['Biller', 'Plants', 'Category', 'N-veces']
 
-    # Calcular total de incidentes por coordinador para el porcentaje
-    coordinator_totals = df.groupby('BILLING COORDINATORS')['ID'].count().reset_index()
+    # Calcular total de incidentes por agente para el porcentaje
+    coordinator_totals = df.groupby(agent_column)['ID'].count().reset_index()
     coordinator_totals.columns = ['Biller', 'Total_Coordinator']
 
     summary = summary.merge(coordinator_totals, on='Biller', how='left')
@@ -361,13 +363,13 @@ def aggregate_by_plant(df: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
-def aggregate_by_issue(df: pd.DataFrame) -> pd.DataFrame:
+def aggregate_by_issue(df: pd.DataFrame, agent_column: str = 'Actual (last) agent') -> pd.DataFrame:
     """
-    Crea resumen de categorías por Billing Coordinator con porcentajes
+    Crea resumen de categorías por Agent con porcentajes
 
     Estructura:
-    - Biller: Nombre del coordinador
-    - Contrato: Porcentaje de incidentes en categoría Contrato
+    - Biller: Nombre del agente
+    - Contract: Porcentaje de incidentes en categoría Contract
     - Interface: Porcentaje de incidentes en categoría Interface
     - Inventory: Porcentaje de incidentes en categoría Inventory
     - Pricing: Porcentaje de incidentes en categoría Pricing
@@ -376,25 +378,26 @@ def aggregate_by_issue(df: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         df: DataFrame categorizado
+        agent_column: Nombre de la columna a usar (por defecto 'Actual (last) agent')
 
     Returns:
-        DataFrame con porcentajes de categorías por biller
+        DataFrame con porcentajes de categorías por agente
     """
-    print("   📊 Agregando métricas de categorías por Biller...")
+    print("   📊 Agregando métricas de categorías por Agent...")
 
-    if 'BILLING COORDINATORS' not in df.columns or 'Category' not in df.columns:
-        print("   ⚠️  Columnas 'BILLING COORDINATORS' o 'Category' no encontradas")
+    if agent_column not in df.columns or 'Category' not in df.columns:
+        print(f"   ⚠️  Columnas '{agent_column}' o 'Category' no encontradas")
         return pd.DataFrame()
 
-    # Agrupar por Biller y Categoría para contar incidentes
-    category_count = df.groupby(['BILLING COORDINATORS', 'Category']).agg({
+    # Agrupar por Agent y Categoría para contar incidentes
+    category_count = df.groupby([agent_column, 'Category']).agg({
         'ID': 'count'
     }).reset_index()
 
     category_count.columns = ['Biller', 'Category', 'Count']
 
-    # Calcular total de incidentes por biller
-    biller_totals = df.groupby('BILLING COORDINATORS')['ID'].count().reset_index()
+    # Calcular total de incidentes por agente
+    biller_totals = df.groupby(agent_column)['ID'].count().reset_index()
     biller_totals.columns = ['Biller', 'Total']
 
     # Merge para agregar el total a cada registro
@@ -413,7 +416,7 @@ def aggregate_by_issue(df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
 
     # Asegurar que todas las categorías esperadas están presentes, llenar con 0% si no existen
-    expected_categories = ['Contrato', 'Interface', 'Inventory', 'Pricing', 'STPO', 'Incomplete']
+    expected_categories = ['Contract', 'Interface', 'Inventory', 'Pricing', 'STPO', 'Incomplete']
     for category in expected_categories:
         if category not in pivot.columns:
             pivot[category] = '0%'
@@ -421,8 +424,20 @@ def aggregate_by_issue(df: pd.DataFrame) -> pd.DataFrame:
             # Reemplazar NaN con 0%
             pivot[category] = pivot[category].fillna('0%')
 
+    # Calcular Total sumando los porcentajes de todas las categorías
+    def calculate_total(row):
+        """Suma los porcentajes de todas las categorías"""
+        total = 0
+        for category in expected_categories:
+            # Remover el '%' y convertir a float
+            percentage_value = float(row[category].rstrip('%'))
+            total += percentage_value
+        return f'{round(total, 2)}%'
+
+    pivot['Total'] = pivot.apply(calculate_total, axis=1)
+
     # Reordenar columnas
-    pivot = pivot[['Biller'] + expected_categories]
+    pivot = pivot[['Biller'] + expected_categories + ['Total']]
 
     print(f"   ✓ Resumen creado: {len(pivot)} billers")
 
@@ -463,27 +478,33 @@ def create_pivot_analysis(df: pd.DataFrame) -> pd.DataFrame:
     return pivot
 
 
-def aggregate_by_inventory(df: pd.DataFrame) -> pd.DataFrame:
+def aggregate_by_inventory(df: pd.DataFrame, agent_column: str = 'Actual (last) agent') -> pd.DataFrame:
     """
-    Crea resumen de inventario por región
+    Crea resumen de inventario por región y planta, separando por Base Unit of Measure
 
     Estructura:
-    - Region: Nombre de la región (concatenado con Plant)
-    - Quantity: Total de inventario por región
-    - Percentage: Porcentaje del total
-    - Biller: Billing Coordinator asociado a la planta con mayor inventario en la región
-    - Plant: Planta con mayor inventario en la región
+    - Region: Nombre de la región
+    - Plant: Planta
+    - Biller: Agent
+    - Ton: Cantidad en TON (de registros con Task text APEX)
+    - To: Cantidad en TO (de registros con Task text APEX)
+    - YD3: Cantidad en YD3 (de registros con Task text COMMAND)
+    - Ton%: Porcentaje de TON respecto al total de TON
+    - To%: Porcentaje de TO respecto al total de TO
+    - YD3%: Porcentaje de YD3 respecto al total de YD3
 
     Args:
-        df: DataFrame categorizado con columnas REGION y Delivery quantity
+        df: DataFrame categorizado con columnas REGION, Plant, Base Unit of Measure,
+            Delivery quantity, agent_column y Task text
+        agent_column: Nombre de la columna a usar (por defecto 'Actual (last) agent')
 
     Returns:
-        DataFrame con métricas de inventario por región
+        DataFrame con métricas de inventario por región, planta y unidad de medida
     """
-    print("   📊 Agregando métricas de inventario por región...")
+    print("   📊 Agregando métricas de inventario por Región y Planta...")
 
     # Verificar columnas necesarias
-    required_columns = ['REGION', 'Plant', 'Delivery quantity', 'BILLING COORDINATORS']
+    required_columns = ['REGION', 'Plant', 'Base Unit of Measure', 'Delivery quantity', agent_column, 'Task text']
     missing_cols = [col for col in required_columns if col not in df.columns]
     if missing_cols:
         print(f"   ⚠️  Columnas faltantes: {missing_cols}")
@@ -492,50 +513,86 @@ def aggregate_by_inventory(df: pd.DataFrame) -> pd.DataFrame:
     # Crear copia para no modificar el original
     inventory_df = df.copy()
 
-    # Filtrar solo registros con Inventory en la categoría
-    if 'Category' in inventory_df.columns:
-        inventory_df = inventory_df[inventory_df['Category'] == 'Inventory'].copy()
+    # Separar datos por origen (APEX y COMMAND) usando Task text
+    # APEX contiene TON y TO
+    # COMMAND contiene YD3
+    apex_data = inventory_df[
+        inventory_df['Task text'].astype(str).str.contains('APEX', case=False, na=False)
+    ].copy()
 
-    if len(inventory_df) == 0:
-        print("   ⚠️  No se encontraron registros de Inventory")
+    command_data = inventory_df[
+        inventory_df['Task text'].astype(str).str.contains('COMMAND', case=False, na=False)
+    ].copy()
+
+    print(f"   ✓ Registros APEX identificados: {len(apex_data):,}")
+    print(f"   ✓ Registros COMMAND identificados: {len(command_data):,}")
+
+    # Procesar APEX (filtrar TON y TO)
+    apex_processed = apex_data[
+        apex_data['Base Unit of Measure'].isin(['TON', 'TO'])
+    ][['REGION', 'Plant', 'Base Unit of Measure', 'Delivery quantity', agent_column]].copy()
+
+    # Procesar COMMAND (filtrar YD3)
+    command_processed = command_data[
+        command_data['Base Unit of Measure'] == 'YD3'
+    ][['REGION', 'Plant', 'Base Unit of Measure', 'Delivery quantity', agent_column]].copy()
+
+    print(f"   ✓ APEX registros TON/TO: {len(apex_processed):,}")
+    print(f"   ✓ COMMAND registros YD3: {len(command_processed):,}")
+
+    # Si no hay datos procesados, retornar DataFrame vacío
+    if len(apex_processed) == 0 and len(command_processed) == 0:
+        print("   ⚠️  No se encontraron registros de inventario (TON, TO, YD3)")
         return pd.DataFrame()
 
-    # Agrupar por Región y Plant para calcular inventario total
-    region_plant_inventory = inventory_df.groupby(['REGION', 'Plant']).agg({
-        'Delivery quantity': 'sum',
-        'BILLING COORDINATORS': 'first'  # Obtener el coordinador asociado
+    # Combinar ambos DataFrames
+    combined_df = pd.concat([apex_processed, command_processed], ignore_index=True)
+
+    # Agrupar por REGION, Plant, Base Unit of Measure y Agent
+    inventory_by_unit = combined_df.groupby(
+        ['REGION', 'Plant', 'Base Unit of Measure', agent_column]
+    ).agg({
+        'Delivery quantity': 'sum'
     }).reset_index()
 
-    region_plant_inventory.columns = ['Region', 'Plant', 'Plant_Inventory', 'Biller']
+    inventory_by_unit.columns = ['Region', 'Plant', 'Unit', 'Biller', 'Quantity']
 
-    # Calcular inventario total por región
-    region_totals = region_plant_inventory.groupby('Region')['Plant_Inventory'].sum().reset_index()
-    region_totals.columns = ['Region', 'Total_Region_Inventory']
+    # Pivotar para obtener TON, TO, YD3 en columnas
+    pivot_inventory = inventory_by_unit.pivot_table(
+        index=['Region', 'Plant', 'Biller'],
+        columns='Unit',
+        values='Quantity',
+        fill_value=0
+    ).reset_index()
 
-    # Merge para obtener el total regional en cada fila
-    region_plant_inventory = region_plant_inventory.merge(region_totals, on='Region', how='left')
+    # Asegurar que existan las columnas de unidades
+    for unit in ['TON', 'TO', 'YD3']:
+        if unit not in pivot_inventory.columns:
+            pivot_inventory[unit] = 0
 
-    # Encontrar la planta con mayor inventario por región
-    region_plant_inventory = region_plant_inventory.sort_values(
-        ['Region', 'Plant_Inventory'],
-        ascending=[True, False]
-    )
+    # Reordenar columnas
+    pivot_inventory = pivot_inventory[['Region', 'Plant', 'Biller', 'TON', 'TO', 'YD3']]
 
-    # Seleccionar solo la planta con mayor inventario por región
-    inventory_summary = region_plant_inventory.drop_duplicates('Region', keep='first').copy()
+    # Calcular totales para porcentajes
+    ton_total = pivot_inventory['TON'].sum()
+    to_total = pivot_inventory['TO'].sum()
+    yd3_total = pivot_inventory['YD3'].sum()
 
-    # Calcular porcentaje
-    inventory_summary['Percentage'] = (
-        inventory_summary['Plant_Inventory'] / inventory_summary['Total_Region_Inventory'] * 100
-    ).round(2).astype(str) + '%'
+    # Calcular porcentajes
+    pivot_inventory['Ton%'] = (pivot_inventory['TON'] / ton_total * 100).round(2) if ton_total > 0 else 0.0
+    pivot_inventory['To%'] = (pivot_inventory['TO'] / to_total * 100).round(2) if to_total > 0 else 0.0
+    pivot_inventory['YD3%'] = (pivot_inventory['YD3'] / yd3_total * 100).round(2) if yd3_total > 0 else 0.0
 
-    # Renombrar columnas para la salida final
-    inventory_summary = inventory_summary[['Region', 'Total_Region_Inventory', 'Percentage', 'Biller', 'Plant']]
-    inventory_summary.columns = ['Region', 'Quantity', 'Percentage', 'Biller', 'Plant']
+    # Renombrar columnas a minúsculas según especificación
+    pivot_inventory = pivot_inventory.rename(columns={
+        'TON': 'Ton',
+        'TO': 'To',
+        'YD3': 'YD3'
+    })
 
-    # Reordenar columnas según especificación
-    inventory_summary = inventory_summary[['Region', 'Quantity', 'Percentage', 'Biller', 'Plant']]
+    # Reordenar columnas finales según especificación
+    pivot_inventory = pivot_inventory[['Region', 'Plant', 'Biller', 'Ton', 'To', 'YD3', 'Ton%', 'To%', 'YD3%']]
 
-    print(f"   ✓ Resumen de inventario creado: {len(inventory_summary)} regiones")
+    print(f"   ✓ Resumen de inventario creado: {len(pivot_inventory)} registros (Region + Plant)")
 
-    return inventory_summary
+    return pivot_inventory

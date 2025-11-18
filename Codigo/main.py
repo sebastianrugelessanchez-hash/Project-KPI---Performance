@@ -47,7 +47,14 @@ def main():
     enriched_data = processing.merge_with_billing_coordinators(clean_data, coordinators_data)
     print(f"✓ Datos enriquecidos (INNER JOIN)")
     print(f"✓ Registros finales: {len(enriched_data):,}")
-    
+
+    # 3.5 TRANSFORM - Filtrar por agentes específicos
+    print("\n[3.5/5] FILTRANDO POR AGENTES ESPECÍFICOS...")
+    agent_list = ['SRUGELES', 'CAMVELEZ', 'JUAHENA', 'JUANRUIZ', 'REGARCI1', 'SPINEDAA', 'MPEREZPA', 'CHREVANS']
+    enriched_data = processing.filter_by_agents(enriched_data, agent_list)
+    print(f"✓ Datos filtrados por agentes")
+    print(f"✓ Registros después de filtrado de agentes: {len(enriched_data):,}")
+
     # 4. TRANSFORM - Categorizar incidentes
     print("\n[4/5] CATEGORIZANDO INCIDENTES...")
     categorized_data = transformation.categorize_incidents(enriched_data)

@@ -136,38 +136,38 @@ def load_excel_data(file_path: str = None) -> pd.DataFrame:
 def load_billing_coordinators(file_path: str = None) -> pd.DataFrame:
     """
     Carga el archivo de Billing Coordinators (archivo separado)
-    
+
     Args:
         file_path: Ruta al archivo de Billing Coordinators. Si no se proporciona,
                    usa la ruta por defecto configurada.
-        
+
     Returns:
         DataFrame con información de coordinadores por Plant
     """
     # Si no se proporciona ruta, usar la ruta por defecto
     if file_path is None:
         file_path = COORDINATORS_FILE_PATH
-    
+
     print(f"   📂 Cargando archivo de coordinadores: {file_path}")
-    
+
     try:
         # Verificar que el archivo existe
         if not os.path.exists(file_path):
             print(f"   ❌ ERROR: Archivo no encontrado en: {file_path}")
             raise FileNotFoundError(f"El archivo no existe: {file_path}")
-        
+
         coordinators_df = pd.read_excel(file_path, engine='openpyxl')
         print(f"   ✓ Coordinadores cargados: {len(coordinators_df):,} registros")
-        
+
         # Verificar que existe columna Plant
         if 'Plant' not in coordinators_df.columns:
             available_cols = list(coordinators_df.columns)
             print(f"   ❌ ERROR: Columna 'Plant' no encontrada")
             print(f"   Columnas disponibles: {available_cols}")
             raise ValueError("Columna 'Plant' es requerida en Billing Coordinators")
-        
+
         return coordinators_df
-        
+
     except FileNotFoundError:
         print(f"   ❌ ERROR: Archivo '{file_path}' no encontrado")
         print(f"   Asegúrate de que el archivo esté en: {file_path}")

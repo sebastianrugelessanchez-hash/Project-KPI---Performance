@@ -51,7 +51,7 @@ class OutputManager:
         4. Billing Coordinators: Desempeño de cada coordinador (calculado desde Resumen)
         5. Plants: Agregado por planta con métricas
         6. Issue: Agregado por issue con métricas
-        7. Inventory: Inventario por región
+        7. Inventory: Inventario por región, separado por unidad de medida
 
         IMPORTANTE: Usa la columna 'BILLING COORDINATORS' (mayúscula, con espacio)
 
@@ -93,9 +93,9 @@ class OutputManager:
             print("      ⚠️  Columna 'Task text' no encontrada para filtro COMMAND")
 
         # Pestaña 4: Billing Coordinators Performance
-        # Usa el DataFrame del Resumen que YA tiene la columna BILLING COORDINATORS del INNER JOIN
+        # Usa el DataFrame del Resumen con la columna 'Actual (last) agent'
         print("      • Calculando desempeño de Billing Coordinators desde Resumen...")
-        billing_coord_df = transformation.calculate_billing_coordinator_performance(resumen_df)
+        billing_coord_df = transformation.calculate_billing_coordinator_performance(resumen_df, agent_column='Actual (last) agent')
         if not billing_coord_df.empty:
             print(f"      • Billing Coordinators: {len(billing_coord_df):,} coordinadores evaluados")
         else:
@@ -103,7 +103,7 @@ class OutputManager:
 
         # Pestaña 5: Plants
         print("      • Agregando datos por Plant...")
-        plants_df = transformation.aggregate_by_plant(resumen_df)
+        plants_df = transformation.aggregate_by_plant(resumen_df, agent_column='Actual (last) agent')
         if not plants_df.empty:
             print(f"      • Plants: {len(plants_df):,} registros")
         else:
@@ -111,7 +111,7 @@ class OutputManager:
 
         # Pestaña 6: Issues
         print("      • Agregando datos por Issue...")
-        issues_df = transformation.aggregate_by_issue(resumen_df)
+        issues_df = transformation.aggregate_by_issue(resumen_df, agent_column='Actual (last) agent')
         if not issues_df.empty:
             print(f"      • Issues: {len(issues_df):,} registros")
         else:
@@ -119,9 +119,9 @@ class OutputManager:
 
         # Pestaña 7: Inventory
         print("      • Agregando datos de Inventario por Región...")
-        inventory_df = transformation.aggregate_by_inventory(resumen_df)
+        inventory_df = transformation.aggregate_by_inventory(resumen_df, agent_column='Actual (last) agent')
         if not inventory_df.empty:
-            print(f"      • Inventory: {len(inventory_df):,} regiones")
+            print(f"      • Inventory: {len(inventory_df):,} registros (Region + Plant)")
         else:
             print("      ⚠️  No se pudo agregar datos de inventario")
 

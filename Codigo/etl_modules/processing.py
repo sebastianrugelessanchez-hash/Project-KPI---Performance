@@ -241,6 +241,53 @@ def merge_with_billing_coordinators(
     return enriched_df
 
 
+def filter_by_agents(df: pd.DataFrame, agent_list: List[str] = None) -> pd.DataFrame:
+    """
+    Filtra el DataFrame para mantener solo registros de agentes específicos
+
+    Args:
+        df: DataFrame con datos enriquecidos
+        agent_list: Lista de códigos de agentes a mantener
+                   Si es None, usa la lista por defecto
+
+    Returns:
+        DataFrame filtrado con solo los agentes especificados
+    """
+    # Lista por defecto de agentes
+    if agent_list is None:
+        agent_list = ['SRUGELES', 'CAMVELEZ', 'JUAHENA', 'JUANRUIZ', 'REGARCI1', 'SPINEDAA', 'MPEREZPA', 'CHREVANS']
+
+    print(f"   🔍 Filtrando por agentes específicos: {len(agent_list)} agentes")
+
+    # Verificar que existe la columna 'Actual (last) agent'
+    if 'Actual (last) agent' not in df.columns:
+        print(f"   ⚠️  Columna 'Actual (last) agent' no encontrada")
+        print(f"   Columnas disponibles: {list(df.columns)}")
+        return df
+
+    before_count = len(df)
+
+    # Filtrar por agentes en la lista
+    filtered_df = df[df['Actual (last) agent'].isin(agent_list)].copy()
+
+    after_count = len(filtered_df)
+    removed_count = before_count - after_count
+
+    print(f"   ✓ Filtro de agentes aplicado:")
+    print(f"      • Registros antes: {before_count:,}")
+    print(f"      • Registros después: {after_count:,}")
+    print(f"      • Registros filtrados: {removed_count:,}")
+
+    # Mostrar agentes encontrados
+    agents_found = filtered_df['Actual (last) agent'].unique()
+    print(f"   ✓ Agentes encontrados: {len(agents_found)}")
+    for agent in sorted(agents_found):
+        count = len(filtered_df[filtered_df['Actual (last) agent'] == agent])
+        print(f"      • {agent}: {count:,} registros")
+
+    return filtered_df
+
+
 def validate_data_quality(df: pd.DataFrame) -> Dict[str, any]:
     """
     Valida la calidad de los datos procesados
