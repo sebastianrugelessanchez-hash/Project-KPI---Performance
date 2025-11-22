@@ -481,14 +481,15 @@ def create_pivot_analysis(df: pd.DataFrame) -> pd.DataFrame:
 def aggregate_by_inventory(df: pd.DataFrame, agent_column: str = 'Actual (last) agent') -> pd.DataFrame:
     """
     Crea resumen de inventario por región y planta, separando por Base Unit of Measure
+    Filtra por los issues específicos de inventario: "COMMAND - Ticket not Goods Issued", "JWS/APEX - Ticket not Goods Issued"
 
     Estructura:
     - Region: Nombre de la región
     - Plant: Planta
     - Biller: Agent
-    - Ton: Cantidad en TON (de registros con Task text APEX)
-    - To: Cantidad en TO (de registros con Task text APEX)
-    - YD3: Cantidad en YD3 (de registros con Task text COMMAND)
+    - Ton: Cantidad en TON (de registros con issue de inventario)
+    - To: Cantidad en TO (de registros con issue de inventario)
+    - YD3: Cantidad en YD3 (de registros con issue de inventario)
     - Ton%: Porcentaje de TON respecto al total de TON
     - To%: Porcentaje de TO respecto al total de TO
     - YD3%: Porcentaje de YD3 respecto al total de YD3
@@ -513,49 +514,34 @@ def aggregate_by_inventory(df: pd.DataFrame, agent_column: str = 'Actual (last) 
     # Crear copia para no modificar el original
     inventory_df = df.copy()
 
-    # Separar datos por origen (APEX y COMMAND) usando Task text
-    # APEX contiene TON y TO
-    # COMMAND contiene YD3
-    apex_data = inventory_df[
-        inventory_df['Task text'].astype(str).str.contains('APEX', case=False, na=False)
+    # Filtrar por los issues específicos de inventario
+    inventory_issues = ["COMMAND - Ticket not Goods Issued", "JWS/APEX - Ticket not Goods Issued"]
+    inventory_data = inventory_df[
+        inventory_df['Task text'].isin(inventory_issues)
     ].copy()
 
-    command_data = inventory_df[
-        inventory_df['Task text'].astype(str).str.contains('COMMAND', case=False, na=False)
-    ].copy()
+    print(f"   ✓ Registros de inventario identificados: {len(inventory_data):,}")
 
-    print(f"   ✓ Registros APEX identificados: {len(apex_data):,}")
-    print(f"   ✓ Registros COMMAND identificados: {len(command_data):,}")
+    # Procesar datos de inventario (filtrar TON, TO, YD3)
+    inventory_processed = inventory_data[
+        inventory_data['Base Unit of Measure'].isin(['TON', 'TO', 'YD3'])
+    ][['REGION', 'Plant', 'Base Unit of Measure', 'Delivery quantity', agent_column, 'Task text']].copy()
 
-    # Procesar APEX (filtrar TON y TO)
-    apex_processed = apex_data[
-        apex_data['Base Unit of Measure'].isin(['TON', 'TO'])
-    ][['REGION', 'Plant', 'Base Unit of Measure', 'Delivery quantity', agent_column]].copy()
-
-    # Procesar COMMAND (filtrar YD3)
-    command_processed = command_data[
-        command_data['Base Unit of Measure'] == 'YD3'
-    ][['REGION', 'Plant', 'Base Unit of Measure', 'Delivery quantity', agent_column]].copy()
-
-    print(f"   ✓ APEX registros TON/TO: {len(apex_processed):,}")
-    print(f"   ✓ COMMAND registros YD3: {len(command_processed):,}")
+    print(f"   ✓ Registros procesados (TON/TO/YD3): {len(inventory_processed):,}")
 
     # Si no hay datos procesados, retornar DataFrame vacío
-    if len(apex_processed) == 0 and len(command_processed) == 0:
+    if len(inventory_processed) == 0:
         print("   ⚠️  No se encontraron registros de inventario (TON, TO, YD3)")
         return pd.DataFrame()
 
-    # Combinar ambos DataFrames
-    combined_df = pd.concat([apex_processed, command_processed], ignore_index=True)
-
-    # Agrupar por REGION, Plant, Base Unit of Measure y Agent
-    inventory_by_unit = combined_df.groupby(
-        ['REGION', 'Plant', 'Base Unit of Measure', agent_column]
+    # Agrupar por REGION, Plant, Base Unit of Measure, Task text y Agent
+    inventory_by_unit = inventory_processed.groupby(
+        ['REGION', 'Plant', 'Base Unit of Measure', 'Task text', agent_column]
     ).agg({
         'Delivery quantity': 'sum'
     }).reset_index()
 
-    inventory_by_unit.columns = ['Region', 'Plant', 'Unit', 'Biller', 'Quantity']
+    inventory_by_unit.columns = ['Region', 'Plant', 'Unit', 'Task_text', 'Biller', 'Quantity']
 
     # Pivotar para obtener TON, TO, YD3 en columnas
     pivot_inventory = inventory_by_unit.pivot_table(
