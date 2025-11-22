@@ -490,9 +490,9 @@ def aggregate_by_inventory(df: pd.DataFrame, agent_column: str = 'Actual (last) 
     - Ton: Cantidad en TON (de registros con issue de inventario)
     - To: Cantidad en TO (de registros con issue de inventario)
     - YD3: Cantidad en YD3 (de registros con issue de inventario)
-    - Ton%: Porcentaje de TON respecto al total de TON
-    - To%: Porcentaje de TO respecto al total de TO
-    - YD3%: Porcentaje de YD3 respecto al total de YD3
+    - Ton%: Porcentaje de TON respecto al total del biller (suma 100% por biller)
+    - To%: Porcentaje de TO respecto al total del biller (suma 100% por biller)
+    - YD3%: Porcentaje de YD3 respecto al total del biller (suma 100% por biller)
 
     Args:
         df: DataFrame categorizado con columnas REGION, Plant, Base Unit of Measure,
@@ -501,6 +501,7 @@ def aggregate_by_inventory(df: pd.DataFrame, agent_column: str = 'Actual (last) 
 
     Returns:
         DataFrame con métricas de inventario por región, planta y unidad de medida
+        Los porcentajes están calculados por biller
     """
     print("   📊 Agregando métricas de inventario por Región y Planta...")
 
@@ -559,15 +560,18 @@ def aggregate_by_inventory(df: pd.DataFrame, agent_column: str = 'Actual (last) 
     # Reordenar columnas
     pivot_inventory = pivot_inventory[['Region', 'Plant', 'Biller', 'TON', 'TO', 'YD3']]
 
-    # Calcular totales para porcentajes
-    ton_total = pivot_inventory['TON'].sum()
-    to_total = pivot_inventory['TO'].sum()
-    yd3_total = pivot_inventory['YD3'].sum()
+    # Calcular porcentajes por Biller (cada biller suma 100% por unidad de medida)
+    def calculate_percentage_by_biller(row, unit):
+        """Calcula el porcentaje de una unidad respecto al total del biller"""
+        biller = row['Biller']
+        biller_total = pivot_inventory[pivot_inventory['Biller'] == biller][unit].sum()
+        if biller_total == 0:
+            return 0.0
+        return round((row[unit] / biller_total * 100), 2)
 
-    # Calcular porcentajes
-    pivot_inventory['Ton%'] = (pivot_inventory['TON'] / ton_total * 100).round(2) if ton_total > 0 else 0.0
-    pivot_inventory['To%'] = (pivot_inventory['TO'] / to_total * 100).round(2) if to_total > 0 else 0.0
-    pivot_inventory['YD3%'] = (pivot_inventory['YD3'] / yd3_total * 100).round(2) if yd3_total > 0 else 0.0
+    pivot_inventory['Ton%'] = pivot_inventory.apply(lambda row: calculate_percentage_by_biller(row, 'TON'), axis=1)
+    pivot_inventory['To%'] = pivot_inventory.apply(lambda row: calculate_percentage_by_biller(row, 'TO'), axis=1)
+    pivot_inventory['YD3%'] = pivot_inventory.apply(lambda row: calculate_percentage_by_biller(row, 'YD3'), axis=1)
 
     # Renombrar columnas a minúsculas según especificación
     pivot_inventory = pivot_inventory.rename(columns={
